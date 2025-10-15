@@ -1,0 +1,33 @@
+package config
+
+import (
+	"flag"
+	"fmt"
+	"log"
+
+	"github.com/caarlos0/env"
+)
+
+type Config struct {
+    Address     string `env:"RUN_ADDRESS"`
+    DatabaseURI string `env:"DATABASE_URI"`
+    AccrualAdd  string `env:"ACCRUAL_SYSTEM_ADDRESS"`
+}
+
+func SetConfig() Config {
+	var cfg Config
+
+	if err := env.Parse(&cfg); err != nil {
+		log.Fatal(fmt.Errorf(`couldn't parse env: %w`, err))
+	}
+
+	flag.StringVar(&cfg.Address, "a", cfg.Address, "Server address")
+	flag.StringVar(&cfg.DatabaseURI, "d", cfg.DatabaseURI, "Database address")
+	flag.StringVar(&cfg.AccrualAdd, "r", cfg.AccrualAdd, "Accrual system address")
+
+	flag.Parse()
+
+	return cfg
+}
+
+//"postgres://go_shop_user:password@localhost:5432/gophermart?sslmode=disable"
