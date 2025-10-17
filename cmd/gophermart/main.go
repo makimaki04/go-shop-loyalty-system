@@ -46,17 +46,22 @@ func main() {
 			r.Route("/login", func(r chi.Router) {
 				r.Post("/", handler.LoginUser)
 			})
-			r.Route("/orders", func(r chi.Router) {
+			
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.WithAuth(sugar))
+				r.Route("/orders", func(r chi.Router) {
+					r.Post("/", handler.PostOrder)
+					r.Get("/", handler.GetOrders)
+				})
+				r.Route("/balance", func(r chi.Router) {
 
-			})
-			r.Route("/balance", func(r chi.Router) {
+					r.Route("/withdraw", func(r chi.Router) {
 
+					})
+				})
 				r.Route("/withdraw", func(r chi.Router) {
 
 				})
-			})
-			r.Route("/withdraw", func(r chi.Router) {
-
 			})
 		})
 	})

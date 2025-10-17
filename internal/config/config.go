@@ -6,6 +6,7 @@ import (
 	"log"
 
 	"github.com/caarlos0/env"
+	"github.com/joho/godotenv"
 )
 
 type Config struct {
@@ -16,6 +17,8 @@ type Config struct {
 
 func SetConfig() Config {
 	var cfg Config
+
+	_ = godotenv.Load(".env")
 
 	if err := env.Parse(&cfg); err != nil {
 		log.Fatal(fmt.Errorf(`couldn't parse env: %w`, err))
@@ -30,4 +33,5 @@ func SetConfig() Config {
 	return cfg
 }
 
-//"postgres://go_shop_user:password@localhost:5432/gophermart?sslmode=disable"
+//WIN "postgres://go_shop_user:password@localhost:5432/gophermart?sslmode=disable"
+//WSL "postgres://go_shop_user:password@172.31.80.1:5432/gophermart?sslmode=disable"

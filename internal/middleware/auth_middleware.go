@@ -87,7 +87,7 @@ func WithAuth(logger *zap.SugaredLogger) func(next http.Handler) http.Handler {
 	}
 }
 
-func GetUserID(r *http.Request) (int, bool) {
-	id, ok := r.Context().Value(userIDKey).(int)
+func GetUserID(r *http.Request) (int64, bool) {
+	id, ok := r.Context().Value(userIDKey).(int64)
 	return id, ok
 }

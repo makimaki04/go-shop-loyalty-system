@@ -1,23 +1,32 @@
 package service
 
 import (
+	"context"
+
 	"github.com/makimaki04/go-shop-loyalty-system/internal/models"
 	"github.com/makimaki04/go-shop-loyalty-system/internal/repository"
 	"go.uber.org/zap"
 )
 
 type Authorization interface {
-	CreateUser(login, password string) (int, error)
-	GenerateToken(id int) (accessToken string, err error)
-	LoginUser(login, password string) (models.User, error)
+	CreateUser(ctx context.Context, login, password string) (int64, error)
+	GenerateToken(id int64) (accessToken string, err error)
+	LoginUser(ctx context.Context, login, password string) (models.User, error)
+}
+
+type Orders interface {
+	LoadOrder(ctx context.Context, userID int64, number string) error
+	GetOrders(ctx context.Context, userID int64) ([]models.Order, error)
 }
 
 type Service struct {
 	Authorization
+	Orders
 }
 
 func NewService(repo *repository.Repository, logger *zap.SugaredLogger) *Service {
 	return &Service{
 		Authorization: NewAuthService(repo.Authorization, logger),
+		Orders:        NewOrdersService(repo.Orders, logger),
 	}
 }

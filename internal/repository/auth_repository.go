@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -43,35 +42,41 @@ func NewAuthRepository(db *sql.DB, logger *zap.SugaredLogger) *AuthRepository {
 	}
 }
 
-func (r *AuthRepository) CreateUser(user models.User) (int, error) {
-	var id int
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+func (r *AuthRepository) CreateUser(ctx context.Context, user models.User) (int64, error) {
+	var id int64
+
+	r.logger.Infof("creating user %s", user.Login)
 
 	err := r.db.QueryRowContext(ctx, insertUserQuery, user.Login, user.PasswordHash).Scan(&id) 
 	if err != nil {
-		var pqErr *pgconn.PgError
-		if errors.As(err, &pqErr) && pqErr.Code == pgerrcode.UniqueViolation {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
+				r.logger.Warnw("user already exists", "login", user.Login, "error", err)
 				return 0, ErrUserExists
 		}
-		return 0, fmt.Errorf("failed to set user %q: %w", user.Login, err)
+		r.logger.Errorw("failed to create user", "login", user.Login, "error", err)
+		return 0, fmt.Errorf("failed to create user %q: %w", user.Login, err)
 	}
 
+	r.logger.Infow("user created", "login", user.Login, "userID", id)
 	return id, nil
 }
 
-func (r *AuthRepository) LoginUser(login string) (models.User, error) {
-	var user models.User 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
+func (r *AuthRepository) LoginUser(ctx context.Context, login string) (models.User, error) {
+	var user models.User
 
-	err :=r.db.QueryRowContext(ctx, selectUserQuery, login).Scan(&user.ID, &user.Login, &user.PasswordHash)
+	r.logger.Infof("user %s trying to login", login)
+
+	err := r.db.QueryRowContext(ctx, selectUserQuery, login).Scan(&user.ID, &user.Login, &user.PasswordHash)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			r.logger.Warnw("user not found", "login", login, "error", err)
 			return models.User{}, ErrUserNotFound
 		}
+		r.logger.Errorw("failed to get user", "login", login, "error", err)
 		return models.User{}, fmt.Errorf("failed to get user %q: %w", login, err)
 	}
 
+	r.logger.Infow("user logged in", "login", user.Login, "userID", user.ID)
 	return user, nil
 }

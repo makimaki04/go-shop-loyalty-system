@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"os"
 	"time"
@@ -24,21 +25,55 @@ func NewAuthService(repo repository.Authorization, logger *zap.SugaredLogger) *A
 	}
 }
 
-func (s *AuthService) CreateUser(login, password string) (int, error) {
+func (s *AuthService) CreateUser(ctx context.Context, login, password string) (int64, error) {
 	passwordHash, err := generatePasswordHash(password)
 	if err != nil {
 		return 0, err
 	}
 	user := models.User{Login: login, PasswordHash: passwordHash}
-	return s.repo.CreateUser(user)
+
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	return s.repo.CreateUser(ctx, user)
+}
+
+func generatePasswordHash(password string) (string, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+
+	return string(hash), nil
+}
+
+var ErrInvalidCredentials = errors.New("invalid login or password")
+
+func (s *AuthService) LoginUser(ctx context.Context, login, password string) (models.User, error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
+	userDB, err := s.repo.LoginUser(ctx, login)
+	if err != nil {
+		return models.User{}, err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(userDB.PasswordHash), []byte(password)); err != nil {
+		return models.User{}, ErrInvalidCredentials
+	}
+
+	return models.User{
+		ID: userDB.ID,
+		Login: userDB.Login,
+	}, nil
 }
 
 type Claims struct {
 	jwt.RegisteredClaims
-	UserID int `json:"id"`
+	UserID int64 `json:"id"`
 }
 
-func (s *AuthService) GenerateToken(id int) (accessToken string, err error) {
+func (s *AuthService) GenerateToken(id int64) (accessToken string, err error) {
 	now := time.Now()
 	expirationTime := now.Add(15 * time.Minute)
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, Claims{
@@ -61,31 +96,4 @@ func (s *AuthService) GenerateToken(id int) (accessToken string, err error) {
 	}
 
 	return tokenStr, nil
-}
-
-func generatePasswordHash(password string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return "", err
-	}
-
-	return string(hash), nil
-}
-
-var ErrInvalidCredentials = errors.New("invalid login or password")
-
-func (s *AuthService) LoginUser(login, password string) (models.User, error) {
-	userDB, err := s.repo.LoginUser(login)
-	if err != nil {
-		return models.User{}, err
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(userDB.PasswordHash), []byte(password)); err != nil {
-		return models.User{}, ErrInvalidCredentials
-	}
-
-	return models.User{
-		ID: userDB.ID,
-		Login: userDB.Login,
-	}, nil
 }
