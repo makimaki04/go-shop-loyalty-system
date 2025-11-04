@@ -19,14 +19,22 @@ type Orders interface {
 	GetOrders(ctx context.Context, userID int64) ([]models.Order, error)
 }
 
+type Balance interface {
+	GetBalance(ctx context.Context, userID int64) (models.Balance, error)
+	WithdrawBonuses(ctx context.Context, withdraw models.Withdraw) error
+	GetWithdrawals(ctx context.Context, userID int64) ([]models.Withdrawals, error)
+}
+
 type Service struct {
 	Authorization
 	Orders
+	Balance
 }
 
 func NewService(repo *repository.Repository, logger *zap.SugaredLogger) *Service {
 	return &Service{
 		Authorization: NewAuthService(repo.Authorization, logger),
 		Orders:        NewOrdersService(repo.Orders, logger),
+		Balance:       NewBalanceService(repo.Balance, logger),
 	}
 }

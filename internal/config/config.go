@@ -10,9 +10,9 @@ import (
 )
 
 type Config struct {
-    Address     string `env:"RUN_ADDRESS"`
-    DatabaseURI string `env:"DATABASE_URI"`
-    AccrualAdd  string `env:"ACCRUAL_SYSTEM_ADDRESS"`
+	Address     string `env:"RUN_ADDRESS"`
+	DatabaseURI string `env:"DATABASE_URI"`
+	AccrualURL  string `env:"ACCRUAL_SYSTEM_ADDRESS"`
 }
 
 func SetConfig() Config {
@@ -26,7 +26,7 @@ func SetConfig() Config {
 
 	flag.StringVar(&cfg.Address, "a", cfg.Address, "Server address")
 	flag.StringVar(&cfg.DatabaseURI, "d", cfg.DatabaseURI, "Database address")
-	flag.StringVar(&cfg.AccrualAdd, "r", cfg.AccrualAdd, "Accrual system address")
+	flag.StringVar(&cfg.AccrualURL, "r", cfg.AccrualURL, "Accrual system address")
 
 	flag.Parse()
 

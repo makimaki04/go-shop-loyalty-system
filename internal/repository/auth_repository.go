@@ -23,6 +23,10 @@ const (
 		FROM users
 		WHERE login = $1
 	`
+	insertUserBalance = `
+		INSERT INTO balances (user_id)
+		VALUES ($1)
+	`
 )
 
 var (
@@ -47,7 +51,27 @@ func (r *AuthRepository) CreateUser(ctx context.Context, user models.User) (int6
 
 	r.logger.Infof("creating user %s", user.Login)
 
-	err := r.db.QueryRowContext(ctx, insertUserQuery, user.Login, user.PasswordHash).Scan(&id) 
+	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{})
+	if err != nil {
+		r.logger.Errorw("failed to start transaction", "error", err)
+		return 0, fmt.Errorf("failed to start transaction: %w", err)
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			_ = tx.Rollback()
+			panic(p)
+		} else if err != nil {
+			_ = tx.Rollback()
+			r.logger.Warnf("transaction rolled back", "user", user.Login, "error", err)
+		} else {
+			if commitErr := tx.Commit(); commitErr != nil {
+				r.logger.Errorw("failed to commit transaction", "user", user.Login, "error", commitErr)
+				err = fmt.Errorf("commit: %w", commitErr)
+			}
+		}
+	}()
+
+	err = tx.QueryRowContext(ctx, insertUserQuery, user.Login, user.PasswordHash).Scan(&id) 
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation {
@@ -58,7 +82,13 @@ func (r *AuthRepository) CreateUser(ctx context.Context, user models.User) (int6
 		return 0, fmt.Errorf("failed to create user %q: %w", user.Login, err)
 	}
 
+	_, err = tx.ExecContext(ctx, insertUserBalance, id)
+	if err != nil {
+		r.logger.Errorw("failed to set user balance", "user_id", id, "error", err)
+	}
+
 	r.logger.Infow("user created", "login", user.Login, "userID", id)
+
 	return id, nil
 }
 

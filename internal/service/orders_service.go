@@ -26,7 +26,7 @@ func NewOrdersService(repo repository.Orders, logger *zap.SugaredLogger) *Orders
 var ErrInvalidOrderNumber = errors.New("invalid order number")
 
 func (s *OrdersService) LoadOrder(ctx context.Context, userID int64, number string) error {
-	if !checkLuhn(number) {
+	if !CheckLuhn(number) {
 		return ErrInvalidOrderNumber
 	}
 
@@ -37,7 +37,7 @@ func (s *OrdersService) LoadOrder(ctx context.Context, userID int64, number stri
 }
 
 
-func checkLuhn(numb string) bool {
+func CheckLuhn(numb string) bool {
 	numb = strings.TrimSpace(numb)
 	if numb == "" {
 		return false

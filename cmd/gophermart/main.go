@@ -1,13 +1,19 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/makimaki04/go-shop-loyalty-system/internal/accrual"
 	"github.com/makimaki04/go-shop-loyalty-system/internal/config"
 	"github.com/makimaki04/go-shop-loyalty-system/internal/handler"
 	"github.com/makimaki04/go-shop-loyalty-system/internal/logger"
@@ -15,6 +21,7 @@ import (
 	"github.com/makimaki04/go-shop-loyalty-system/internal/migrations"
 	"github.com/makimaki04/go-shop-loyalty-system/internal/repository"
 	"github.com/makimaki04/go-shop-loyalty-system/internal/service"
+	"github.com/makimaki04/go-shop-loyalty-system/internal/worker_pool"
 	"go.uber.org/zap"
 )
 
@@ -46,7 +53,7 @@ func main() {
 			r.Route("/login", func(r chi.Router) {
 				r.Post("/", handler.LoginUser)
 			})
-			
+
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.WithAuth(sugar))
 				r.Route("/orders", func(r chi.Router) {
@@ -66,7 +73,39 @@ func main() {
 		})
 	})
 
-	if err := http.ListenAndServe(cfg.Address, r); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	accrualClient := accrual.NewClient(cfg.AccrualURL, sugar)
+	pool := workerpool.NewWorkerPool(accrualClient, repo.Orders, repo.Balance, 5*time.Second, sugar)
+	go pool.Start(ctx, 4)
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+
+	srv := &http.Server{
+		Addr:    cfg.Address,
+		Handler: r,
+	}
+
+	go func() {
+		<-sigCh
+		sugar.Info("Received shutdown signal")
+
+		// сначала останавливаем воркеров
+		pool.Stop(cancel)
+
+		// потом HTTP сервер
+		ctxShutdown, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer shutdownCancel()
+		if err := srv.Shutdown(ctxShutdown); err != nil {
+			sugar.Errorw("failed to gracefully shutdown http server", "error", err)
+		} else {
+			sugar.Info("HTTP server stopped gracefully")
+		}
+	}()
+
+	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		sugar.Fatalw("Server failed to start", "address", cfg.Address, "error", err)
 	}
 }

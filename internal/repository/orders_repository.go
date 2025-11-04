@@ -22,15 +22,38 @@ const (
 		FROM orders
 		WHERE number = $1
 	`
-	getUserOrdersQuery = `
+	selectUserOrdersQuery = `
 		SELECT number, status, accrual, uploaded_at
-		FROM orders as o
+		FROM orders
 		WHERE user_id = $1
 		ORDER BY uploaded_at DESC
+	`
+	selectPendingOrders = `
+		SELECT number, status
+		FROM orders
+		WHERE status IN('NEW', 'PROCESSING')
+	`
+	updateOrderStatus = `
+		UPDATE orders
+		SET status = $1, accrual = 
+		    CASE 
+		        WHEN $2 > 0 THEN $2
+		        ELSE accrual 
+		    END
+		WHERE number = $3
 	`
 )
 
 type OrderStatus string
+
+func (s OrderStatus) IsValid() bool {
+	switch s {
+	case OrderStatusNew, OrderStatusProcessing, OrderStatusInvalid, OrderStatusProcessed:
+		return true
+	default:
+		return false
+	}
+}
 
 const (
 	OrderStatusNew        OrderStatus = "NEW"
@@ -92,9 +115,9 @@ var (
 )
 
 func (r *OrdersRepository) GetOrders(ctx context.Context, userID int64) ([]models.Order, error) {
-	r.logger.Infof("user %v trying to get his orders", userID)
+	r.logger.Infow("fetching orders for user", "user_id", userID)
 
-	rows, err := r.db.QueryContext(ctx, getUserOrdersQuery, userID)
+	rows, err := r.db.QueryContext(ctx, selectUserOrdersQuery, userID)
 	if err != nil {
 		r.logger.Errorf("query row context error %v", err)
 		return nil, fmt.Errorf("failed to get orders for user %d: %w", userID, err)
@@ -115,14 +138,61 @@ func (r *OrdersRepository) GetOrders(ctx context.Context, userID int64) ([]model
 	}
 
 	if err := rows.Err(); err != nil {
-		r.logger.Errorf("rows.Err() returned the error %w", err)
+		r.logger.Errorw("rows iteration error", "user_id", userID, "error", err)
 		return nil, fmt.Errorf("failed to get orders for user %d: %w", userID, err)
 	}
 
 	if len(orders) == 0 {
 		r.logger.Errorw("no orders found", "userID", userID)
-		return nil, ErrNoOrders
+		return []models.Order{}, ErrNoOrders
+	}
+
+	r.logger.Infow("orders successfully fetched", "user_id", userID, "count", len(orders))
+
+	return orders, nil
+}
+
+func (r *OrdersRepository) GetPendingorders(ctx context.Context) ([]models.PendingOrder, error) {
+	rows, err := r.db.QueryContext(ctx, selectPendingOrders)
+	if err != nil {
+		r.logger.Errorf("query row context error %v", err)
+		return nil, fmt.Errorf("failed to get orders: %w", err)
+	}
+	defer rows.Close()
+
+	var orders []models.PendingOrder
+
+	for rows.Next() {
+		var o models.PendingOrder
+
+		err := rows.Scan(&o.Number, &o.Status)
+		if err != nil {
+			r.logger.Errorf("rows scan error %v", err)
+			return nil, fmt.Errorf("failed to get orders: %w", err)
+		}
+
+		orders = append(orders, o)
+	}
+
+	if err := rows.Err(); err != nil {
+		r.logger.Errorw("rows iteration error", "error", err)
+		return nil, fmt.Errorf("failed to get orders: %w", err)
+	}
+
+	if len(orders) == 0 {
+		r.logger.Error("no orders found")
+		return nil, fmt.Errorf("no orders found")
 	}
 
 	return orders, nil
+}
+
+func (r *OrdersRepository) UpdateOrderStatus(ctx context.Context, order string, status OrderStatus, accrual float64) error {
+	_, err := r.db.ExecContext(ctx, updateOrderStatus, status, accrual, order)
+	if err != nil {
+		r.logger.Warnw("failed to update order status", "order", order, "error", err)
+		return fmt.Errorf("failed to update order %s status: %v", order, err)
+	}
+
+	return nil
 }
