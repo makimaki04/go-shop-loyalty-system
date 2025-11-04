@@ -61,13 +61,13 @@ func main() {
 					r.Get("/", handler.GetOrders)
 				})
 				r.Route("/balance", func(r chi.Router) {
-
+					r.Get("/", handler.GetBalance)
 					r.Route("/withdraw", func(r chi.Router) {
-
+						r.Post("/", handler.PostWithdraw)
 					})
 				})
-				r.Route("/withdraw", func(r chi.Router) {
-
+				r.Route("/withdrawals", func(r chi.Router) {
+					r.Get("/", handler.GetWithdrawals)
 				})
 			})
 		})
