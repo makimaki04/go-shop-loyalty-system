@@ -21,7 +21,7 @@ import (
 	"github.com/makimaki04/go-shop-loyalty-system/internal/migrations"
 	"github.com/makimaki04/go-shop-loyalty-system/internal/repository"
 	"github.com/makimaki04/go-shop-loyalty-system/internal/service"
-	"github.com/makimaki04/go-shop-loyalty-system/internal/worker_pool"
+	"github.com/makimaki04/go-shop-loyalty-system/internal/workerpool"
 	"go.uber.org/zap"
 )
 
@@ -37,8 +37,13 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("something went wrong during db initialization"))
 	}
+
+	if cfg.JWTSecret == "" {
+		sugar.Fatal("JWT_SECRET is not set")
+	}
+
 	repo := repository.NewRepository(db, sugar)
-	service := service.NewService(repo, sugar)
+	service := service.NewService(repo, cfg.JWTSecret, sugar)
 	handler := handler.NewHandler(service, sugar)
 
 	r := chi.NewRouter()

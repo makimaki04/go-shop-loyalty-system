@@ -13,6 +13,7 @@ type Config struct {
 	Address     string `env:"RUN_ADDRESS"`
 	DatabaseURI string `env:"DATABASE_URI"`
 	AccrualURL  string `env:"ACCRUAL_SYSTEM_ADDRESS"`
+	JWTSecret 	string `env:"JWT_SECRET"`
 }
 
 func SetConfig() Config {

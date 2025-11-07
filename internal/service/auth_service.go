@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"errors"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v4"
@@ -15,12 +14,14 @@ import (
 
 type AuthService struct {
 	repo   repository.Authorization
+	jwtSecret string
 	logger *zap.SugaredLogger
 }
 
-func NewAuthService(repo repository.Authorization, logger *zap.SugaredLogger) *AuthService {
+func NewAuthService(repo repository.Authorization, secret string, logger *zap.SugaredLogger) *AuthService {
 	return &AuthService{
 		repo:   repo,
+		jwtSecret: secret,
 		logger: logger,
 	}
 }
@@ -85,12 +86,7 @@ func (s *AuthService) GenerateToken(id int64) (accessToken string, err error) {
 		UserID: id,
 	})
 
-	secret := os.Getenv("JWT_SECRET")
-	if secret == "" {
-		return "", errors.New("JWT_SECRET is not set")
-	}
-
-	tokenStr, err := token.SignedString([]byte(secret))
+	tokenStr, err := token.SignedString([]byte(s.jwtSecret))
 	if err != nil {
 		return "",  err
 	}

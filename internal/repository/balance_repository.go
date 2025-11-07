@@ -37,7 +37,7 @@ const (
 		WHERE user_id = $1
 		ORDER BY processed_at DESC
 	`
-	updateCurrentBalance= `
+	updateCurrentBalance = `
 		UPDATE balances
 		SET current = current + $1
 		WHERE user_id = (

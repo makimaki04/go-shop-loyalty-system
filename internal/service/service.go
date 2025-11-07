@@ -31,9 +31,9 @@ type Service struct {
 	Balance
 }
 
-func NewService(repo *repository.Repository, logger *zap.SugaredLogger) *Service {
+func NewService(repo *repository.Repository, secret string, logger *zap.SugaredLogger) *Service {
 	return &Service{
-		Authorization: NewAuthService(repo.Authorization, logger),
+		Authorization: NewAuthService(repo.Authorization, secret, logger),
 		Orders:        NewOrdersService(repo.Orders, logger),
 		Balance:       NewBalanceService(repo.Balance, logger),
 	}

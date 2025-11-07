@@ -30,16 +30,29 @@ func NewHandler(service *service.Service, logger *zap.SugaredLogger) *Handler {
 
 const maxBodySize = 1 << 20
 
-func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
-	var req dto.RegisterRequest
+func parseJSONBody[T any](w http.ResponseWriter, r *http.Request) (T, error) {
+	var req T
 
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
 	defer r.Body.Close()
 
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
+
 	if err := dec.Decode(&req); err != nil {
-		respondWithError(w, http.StatusBadRequest, "couldn't read request body", h.logger)
+		if errors.Is(err, io.EOF) {
+			return req, errors.New("empty request body")
+		}
+		return req, err
+	}
+
+	return req, nil
+}
+
+func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
+	req, err := parseJSONBody[dto.RegisterRequest](w, r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error(), h.logger)
 		return
 	}
 
@@ -83,15 +96,9 @@ func (h *Handler) SignUp(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) LoginUser(w http.ResponseWriter, r *http.Request) {
-	var req dto.LoginRequest
-
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
-	defer r.Body.Close()
-
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		respondWithError(w, http.StatusBadRequest, "couldn't read request body", h.logger)
+	req, err := parseJSONBody[dto.LoginRequest](w, r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error(), h.logger)
 		return
 	}
 
@@ -226,21 +233,15 @@ func (h *Handler) GetBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PostWithdraw(w http.ResponseWriter, r *http.Request) {
-	var req dto.WithdrawRequest
-
 	userID, ok := middleware.GetUserID(r)
 	if !ok {
 		respondWithError(w, http.StatusUnauthorized, "unauthorized", h.logger)
 		return
 	}
 
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodySize)
-	defer r.Body.Close()
-
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&req); err != nil {
-		respondWithError(w, http.StatusBadRequest, "couldn't read request body", h.logger)
+	req, err := parseJSONBody[dto.WithdrawRequest](w, r)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error(), h.logger)
 		return
 	}
 
@@ -257,7 +258,7 @@ func (h *Handler) PostWithdraw(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
-	err := h.service.Balance.WithdrawBonuses(ctx, withdraw)
+	err = h.service.Balance.WithdrawBonuses(ctx, withdraw)
 	switch {
 	case errors.Is(err, service.ErrInvalidOrderNumber):
 		respondWithError(w, http.StatusUnprocessableEntity, "invalid order number", h.logger)
